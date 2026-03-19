@@ -2477,46 +2477,6 @@ BotaoFlutuar = {
         end
     end
 },
-BotaoGravidadeZero = {
-    Nome = "Zero Gravity",
-    IsToggle = true,
-    Repeat = false,
-
-    Script = function(state)
-        print("Estado recebido:", state) -- debug
-
-        local player = game:GetService("Players").LocalPlayer
-        if not player then return end
-
-        local character = player.Character or player.CharacterAdded:Wait()
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-
-        -- salvar valores originais
-        if BotaoGravidadeZero.originalGravity == nil then
-            BotaoGravidadeZero.originalGravity = workspace.Gravity
-        end
-
-        if BotaoGravidadeZero.originalJump == nil then
-            BotaoGravidadeZero.originalJump = humanoid.JumpPower
-        end
-
-        -- 🔥 ATIVAR
-        if state == "on" then
-            print("ATIVANDO")
-
-            workspace.Gravity = BotaoGravidadeZero.originalGravity * 0.5 -- gravidade menor
-            humanoid.JumpPower = BotaoGravidadeZero.originalJump * 1.5 -- pulo maior
-
-        -- 🔥 DESATIVAR
-        elseif state == "off" then
-            print("DESATIVANDO")
-
-            workspace.Gravity = BotaoGravidadeZero.originalGravity or 196.2
-            humanoid.JumpPower = BotaoGravidadeZero.originalJump or 50
-        end
-    end
-},
 BetaMode = {
     Nome = "Beta Mode",
     IsToggle = true,
