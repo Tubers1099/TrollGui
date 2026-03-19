@@ -2482,24 +2482,17 @@ BotaoGravidadeZero = {
     IsToggle = true,
     Repeat = false,
     Script = function(state)  -- state = true (on) / false (off)
-        local player = game.Players.LocalPlayer
-        local character = player.Character
-        if not character then return end
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
+        -- variável para armazenar a gravidade original
+        if not BotaoGravidadeZero.originalGravity then
+            BotaoGravidadeZero.originalGravity = game.Players.LocalPlayer.Character.Humanoid.Gravity
+        end
 
         if state then
-            -- Criar BodyForce para anular gravidade
-            local bf = Instance.new("BodyForce")
-            bf.Name = "GravidadeZeroBF"
-            bf.Force = Vector3.new(0, workspace.Gravity * hrp:GetMass(), 0) -- cancela a gravidade
-            bf.Parent = hrp
+            -- ativa gravidade zero
+            game.Players.LocalPlayer.Character.Humanoid.Gravity = 0
         else
-            -- Remover BodyForce
-            local bf = hrp:FindFirstChild("GravidadeZeroBF")
-            if bf then
-                bf:Destroy()
-            end
+            -- volta a gravidade original
+            game.Players.LocalPlayer.Character.Humanoid.Gravity = BotaoGravidadeZero.originalGravity
         end
     end
 },
