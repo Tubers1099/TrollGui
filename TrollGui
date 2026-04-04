@@ -3821,6 +3821,32 @@ LoudServer = {
 
     end
 },
+NoFall = {
+    Nome = "No Fall",
+    IsToggle = true,
+    Repeat = false,
+    Script = function(state)
+        local player = game.Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart")
+
+        if state then
+            -- Cria força anti-gravidade
+            local force = Instance.new("BodyVelocity")
+            force.Name = "NoFallForce"
+            force.MaxForce = Vector3.new(0, math.huge, 0)
+            force.Velocity = Vector3.new(0, 0, 0)
+            force.Parent = hrp
+
+        else
+            -- Remove a força
+            local existing = hrp:FindFirstChild("NoFallForce")
+            if existing then
+                existing:Destroy()
+            end
+        end
+    end
+},
     BotaoTeste5 = {
         Nome = "Botão teste",
         IsToggle = false,
