@@ -3523,13 +3523,14 @@ end
 runInvisfling()
         end
     },
-	QuietServer = {
-        Nome = "QuietServer",
-        IsToggle = false,
-        Repeat = false,
-        Script = function()
+QuietServer = {
+    Nome = "QuietServer",
+    IsToggle = false,
+    Repeat = false,
+    Script = function()
+
 --==============================================================
--- Inicio
+-- Serviços
 --==============================================================
 
 local HttpService = game:GetService("HttpService")
@@ -3538,17 +3539,61 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
+
+-- 🔥 PLACE FIXA
 local placeId = game.PlaceId
 
-local foundServer = nil
+--==============================================================
+-- UI Mensagem
+--==============================================================
+
+local function showMessage(textMsg, color)
+    pcall(function()
+        local old = player.PlayerGui:FindFirstChild("GameCaptionGui")
+        if old then old:Destroy() end
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "GameCaptionGui"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+        gui.Parent = player.PlayerGui
+
+        local frame = Instance.new("Frame")
+        frame.AnchorPoint = Vector2.new(0.5, 1)
+        frame.Position = UDim2.new(0.5, 0, 0.94, 0)
+        frame.Size = UDim2.new(0.6, 0, 0.05, 0)
+        frame.BackgroundTransparency = 1
+        frame.Parent = gui
+
+        local text = Instance.new("TextLabel")
+        text.BackgroundTransparency = 1
+        text.Size = UDim2.fromScale(1, 1)
+        text.TextScaled = true
+        text.Font = Enum.Font.GothamBold
+        text.TextColor3 = color
+        text.TextStrokeTransparency = 0.6
+        text.TextTransparency = 1
+        text.Text = textMsg
+        text.Parent = frame
+
+        TweenService:Create(text, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+
+        task.delay(4, function()
+            TweenService:Create(text, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+            task.delay(0.3, function()
+                gui:Destroy()
+            end)
+        end)
+    end)
+end
 
 --==============================================================
--- Função de pegar servidores
+-- Buscar servidores
 --==============================================================
 
 local function getServers(cursor)
     local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Asc&limit=100"
-    
+
     if cursor then
         url = url .. "&cursor=" .. cursor
     end
@@ -3565,109 +3610,94 @@ local function getServers(cursor)
 end
 
 --==============================================================
--- Procurar servidor mais vazio
+-- Achar servidor vazio
 --==============================================================
 
-local cursor = nil
-local bestServer = nil
-local lowestPlayers = math.huge
+local function findBestServer()
+    local cursor = nil
+    local bestServer = nil
+    local lowestPlayers = math.huge
 
-repeat
-    local data = getServers(cursor)
+    repeat
+        local data = getServers(cursor)
 
-    if data and data.data then
-        for _, server in pairs(data.data) do
-            if server.id ~= game.JobId then
+        if data and data.data then
+            for _, server in pairs(data.data) do
                 if server.playing < lowestPlayers then
                     lowestPlayers = server.playing
                     bestServer = server.id
 
                     if server.playing == 0 then
-                        break
+                        return bestServer
                     end
                 end
             end
+
+            cursor = data.nextPageCursor
+        else
+            break
         end
 
-        cursor = data.nextPageCursor
-    else
-        break
-    end
+        task.wait(0.2)
+    until not cursor
 
-    task.wait(0.2)
-until (lowestPlayers == 0) or not cursor
-
-foundServer = bestServer
+    return bestServer
+end
 
 --==============================================================
--- Função de mensagem na tela
+-- Teleporte inteligente
 --==============================================================
 
-local function showMessage(textMsg, color)
-    local old = player.PlayerGui:FindFirstChild("GameCaptionGui")
-    if old then old:Destroy() end
+local function smartTeleport()
+    showMessage("🔎 Looking for an empty server...", Color3.fromRGB(255,255,0))
 
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "GameCaptionGui"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.Parent = player.PlayerGui
+    local serverId = findBestServer()
 
-    local frame = Instance.new("Frame")
-    frame.AnchorPoint = Vector2.new(0.5, 1)
-    frame.Position = UDim2.new(0.5, 0, 0.945, 0)
-    frame.Size = UDim2.new(0.65, 0, 0.055, 0)
-    frame.BackgroundTransparency = 1
-    frame.Parent = gui
+    if serverId then
+        showMessage("🚀 Heading to the least crowded server...", Color3.fromRGB(0,255,0))
 
-    local text = Instance.new("TextLabel")
-    text.BackgroundTransparency = 1
-    text.Size = UDim2.fromScale(1, 1)
-    text.TextWrapped = true
-    text.TextXAlignment = Enum.TextXAlignment.Center
-    text.TextYAlignment = Enum.TextYAlignment.Center
-    text.TextScaled = true
-    text.Font = Enum.Font.GothamSemibold
-    text.TextSize = 26
-    text.TextColor3 = color
-    text.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    text.TextStrokeTransparency = 0.65
-    text.TextTransparency = 1
-    text.Text = textMsg
-    text.Parent = frame
-
-    TweenService:Create(
-        text,
-        TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {TextTransparency = 0}
-    ):Play()
-
-    task.delay(5, function()
-        TweenService:Create(
-            text,
-            TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-            {TextTransparency = 1}
-        ):Play()
-
-        task.delay(0.3, function()
-            gui:Destroy()
+        local success = pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, serverId, player)
         end)
-    end)
-end
 
---==============================================================
--- Teleporte
---==============================================================
+        if not success then
+            warn("Failed to teleport to the specific server.")
 
-if foundServer then
-    showMessage("Success! You will be teleported in a few moments.", Color3.fromRGB(0, 255, 0))
-    task.wait(0.5)
-    TeleportService:TeleportToPlaceInstance(placeId, foundServer, player)
-else
-    showMessage("Something went wrong and you weren't teleported.", Color3.fromRGB(255, 0, 0))
-end
+            showMessage("⚠️ Going to the normal server...", Color3.fromRGB(255,165,0))
+
+            task.wait(1)
+
+            pcall(function()
+                TeleportService:Teleport(placeId, player)
+            end)
         end
-    },
+    else
+        showMessage("❌ No servers found...", Color3.fromRGB(255,0,0))
+
+        task.wait(1)
+
+        TeleportService:Teleport(placeId, player)
+    end
+end
+
+--==============================================================
+-- Anti-falha (retry automático)
+--==============================================================
+
+TeleportService.TeleportInitFailed:Connect(function()
+    showMessage("🔁 Failed... trying again...", Color3.fromRGB(255,0,0))
+    task.wait(2)
+    smartTeleport()
+end)
+
+--==============================================================
+-- Executar
+--==============================================================
+
+smartTeleport()
+
+    end
+},
 LoudServer = {
     Nome = "LoudServer",
     IsToggle = false,
@@ -3812,11 +3842,11 @@ LoudServer = {
         --==============================================================
 
         if foundServer then
-            showMessage("Entrando em servidor cheio com vaga...", Color3.fromRGB(0, 255, 0))
+            showMessage("Joining a full server", Color3.fromRGB(0, 255, 0))
             task.wait(0.5)
             TeleportService:TeleportToPlaceInstance(placeId, foundServer, player)
         else
-            showMessage("Nenhum servidor com vaga encontrado.", Color3.fromRGB(255, 0, 0))
+            showMessage("Failed to join full server", Color3.fromRGB(255, 0, 0))
         end
 
     end
@@ -3973,21 +4003,21 @@ end
 --==============================================================
 
 local function smartTeleport()
-    showMessage("🔎 Procurando servidor vazio...", Color3.fromRGB(255,255,0))
+    showMessage("🔎 Looking for an empty server...", Color3.fromRGB(255,255,0))
 
     local serverId = findBestServer()
 
     if serverId then
-        showMessage("🚀 Indo pro servidor mais vazio...", Color3.fromRGB(0,255,0))
+        showMessage("🚀 Heading to the least crowded server...", Color3.fromRGB(0,255,0))
 
         local success = pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, serverId, player)
         end)
 
         if not success then
-            warn("Falhou ao teleportar pro server específico")
+            warn("Failed to teleport to the specific server.")
 
-            showMessage("⚠️ Indo pro servidor normal...", Color3.fromRGB(255,165,0))
+            showMessage("⚠️ Going to the normal server...", Color3.fromRGB(255,165,0))
 
             task.wait(1)
 
@@ -3996,7 +4026,7 @@ local function smartTeleport()
             end)
         end
     else
-        showMessage("❌ Nenhum servidor encontrado...", Color3.fromRGB(255,0,0))
+        showMessage("❌ No servers found...", Color3.fromRGB(255,0,0))
 
         task.wait(1)
 
@@ -4009,7 +4039,7 @@ end
 --==============================================================
 
 TeleportService.TeleportInitFailed:Connect(function()
-    showMessage("🔁 Falhou... tentando novamente...", Color3.fromRGB(255,0,0))
+    showMessage("🔁 Failed... trying again...", Color3.fromRGB(255,0,0))
     task.wait(2)
     smartTeleport()
 end)
