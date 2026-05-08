@@ -4056,6 +4056,46 @@ smartTeleport()
 
     end
 },
+ClickBlock = {
+    Nome = "Click = Block",
+    IsToggle = true,
+    Repeat = false,
+
+    Script = function(Ativado)
+
+        if Ativado then
+
+            local player = game.Players.LocalPlayer
+            local mouse = player:GetMouse()
+
+            _G.ClickBlockConnection = mouse.Button1Down:Connect(function()
+
+                local pos = mouse.Hit.Position
+
+                local bloco = Instance.new("Part")
+                bloco.Size = Vector3.new(6,6,6)
+                bloco.Anchored = true
+                bloco.Material = Enum.Material.SmoothPlastic
+                bloco.BrickColor = BrickColor.new("Bright blue")
+
+                bloco.Position = Vector3.new(
+                    math.floor(pos.X / 2) * 2,
+                    math.floor(pos.Y / 2) * 2,
+                    math.floor(pos.Z / 2) * 2
+                )
+
+                bloco.Parent = workspace
+            end)
+
+        else
+
+            if _G.ClickBlockConnection then
+                _G.ClickBlockConnection:Disconnect()
+                _G.ClickBlockConnection = nil
+            end
+        end
+    end
+},
     BotaoTeste5 = {
         Nome = "Botão teste",
         IsToggle = false,
