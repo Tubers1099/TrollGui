@@ -4000,6 +4000,213 @@ ClickBlock = {
         end
     end
 },
+
+WalkAllow = {
+    Nome = "WalkAllow",
+    IsToggle = false,
+    Repeat = false,
+
+    Script = function(Ativado)
+local Connections = {}
+local Enabled = false
+local Keys = {
+    W = false,
+    A = false,
+    S = false,
+    D = false
+}
+        local Players = game:GetService("Players")
+        local UIS = game:GetService("UserInputService")
+        local RunService = game:GetService("RunService")
+
+        local Player = Players.LocalPlayer
+        local Character = Player.Character or Player.CharacterAdded:Wait()
+
+        local Humanoid = Character:WaitForChild("Humanoid")
+        local RootPart = Character:WaitForChild("HumanoidRootPart")
+        local Animator = Humanoid:FindFirstChildOfClass("Animator")
+
+        -- velocidade um pouco maior
+        local Speed = 44
+
+        ----------------------------------------------------------------
+        -- OFF / FALSE
+        ----------------------------------------------------------------
+        if Ativado == false then
+
+            Enabled = false
+
+            -- desconecta tudo
+            for _, Connection in pairs(Connections) do
+                if Connection then
+                    Connection:Disconnect()
+                end
+            end
+
+            table.clear(Connections)
+
+            -- limpa teclas
+            Keys.W = false
+            Keys.A = false
+            Keys.S = false
+            Keys.D = false
+
+            -- volta padrão roblox
+            Humanoid.AutoRotate = true
+            Humanoid.WalkSpeed = 16
+
+            -- para movimento custom
+            RootPart.AssemblyLinearVelocity = Vector3.new(
+                0,
+                RootPart.AssemblyLinearVelocity.Y,
+                0
+            )
+
+            Humanoid:Move(Vector3.zero, false)
+
+            -- restaura velocidade normal das animações
+            if Animator then
+                for _, Track in pairs(Animator:GetPlayingAnimationTracks()) do
+                    Track:AdjustSpeed(1)
+                end
+            end
+
+            return
+        end
+
+        ----------------------------------------------------------------
+        -- ON / TRUE
+        ----------------------------------------------------------------
+        Enabled = true
+
+        Humanoid.AutoRotate = false
+
+        Connections.InputBegan = UIS.InputBegan:Connect(function(Input, GPE)
+
+            if GPE or not Enabled then
+                return
+            end
+
+            local Key = Input.KeyCode
+
+            if Key == Enum.KeyCode.W then
+                Keys.W = true
+
+            elseif Key == Enum.KeyCode.A then
+                Keys.A = true
+
+            elseif Key == Enum.KeyCode.S then
+                Keys.S = true
+
+            elseif Key == Enum.KeyCode.D then
+                Keys.D = true
+
+            elseif Key == Enum.KeyCode.Space then
+                Humanoid.Jump = true
+            end
+        end)
+
+        Connections.InputEnded = UIS.InputEnded:Connect(function(Input)
+
+            local Key = Input.KeyCode
+
+            if Key == Enum.KeyCode.W then
+                Keys.W = false
+
+            elseif Key == Enum.KeyCode.A then
+                Keys.A = false
+
+            elseif Key == Enum.KeyCode.S then
+                Keys.S = false
+
+            elseif Key == Enum.KeyCode.D then
+                Keys.D = false
+            end
+        end)
+
+        Connections.Render = RunService.RenderStepped:Connect(function()
+
+            if not Enabled then
+                return
+            end
+
+            local Camera = workspace.CurrentCamera
+
+            local Forward = Camera.CFrame.LookVector
+            local Right = Camera.CFrame.RightVector
+
+            Forward = Vector3.new(Forward.X, 0, Forward.Z).Unit
+            Right = Vector3.new(Right.X, 0, Right.Z).Unit
+
+            local MoveDirection = Vector3.zero
+
+            if Keys.W then
+                MoveDirection += Forward
+            end
+
+            if Keys.S then
+                MoveDirection -= Forward
+            end
+
+            if Keys.A then
+                MoveDirection -= Right
+            end
+
+            if Keys.D then
+                MoveDirection += Right
+            end
+
+            local Y = RootPart.AssemblyLinearVelocity.Y
+
+            if MoveDirection.Magnitude > 0 then
+
+                MoveDirection = MoveDirection.Unit
+
+                -- movimento
+                RootPart.AssemblyLinearVelocity = Vector3.new(
+                    MoveDirection.X * Speed,
+                    Y,
+                    MoveDirection.Z * Speed
+                )
+
+                -- rotação
+                RootPart.CFrame = CFrame.lookAt(
+                    RootPart.Position,
+                    RootPart.Position + MoveDirection
+                )
+
+                -- animações
+                Humanoid:Move(Vector3.new(0,0,-0.55), false)
+
+                -- velocidade da animação levemente mais rápida
+                if Animator then
+                    for _, Track in pairs(Animator:GetPlayingAnimationTracks()) do
+                        if Track.Name:lower():find("walk")
+                        or Track.Name:lower():find("run") then
+                            Track:AdjustSpeed(0.9)
+                        end
+                    end
+                end
+
+            else
+
+                RootPart.AssemblyLinearVelocity = Vector3.new(
+                    0,
+                    Y,
+                    0
+                )
+
+                Humanoid:Move(Vector3.zero, false)
+
+                if Animator then
+                    for _, Track in pairs(Animator:GetPlayingAnimationTracks()) do
+                        Track:AdjustSpeed(1)
+                    end
+                end
+            end
+        end)
+    end
+},
 }
 -- FIM DA SEÇÃO DE BOTÕES ↑↑↑
 
