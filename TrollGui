@@ -4604,42 +4604,116 @@ MinimizeBox.TextColor3 = Color3.fromRGB(255,255,255)
 Instance.new("UICorner", MinimizeBox).CornerRadius = UDim.new(0,6)
 MinimizeBox.ZIndex = 4
 
-local CloseBtn = Instance.new("TextButton", TopBar)
+-- BOTÃO FECHAR
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Parent = TopBar
 CloseBtn.Size = UDim2.new(0,34,0,26)
 CloseBtn.Position = UDim2.new(0.84,0,0.5,-13)
+
 CloseBtn.Text = "X"
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 14
 CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
+
 CloseBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0,6)
+CloseBtn.BorderSizePixel = 0
+
+CloseBtn.Active = true
+CloseBtn.Selectable = true
+CloseBtn.ZIndex = 999
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0,6)
+CloseCorner.Parent = CloseBtn
+
+-- EVENTO DO BOTÃO
 CloseBtn.MouseButton1Click:Connect(function()
-    if guiClosed then return end
+
+    -- EVITA EXECUTAR 2X
+    if guiClosed then
+        return
+    end
+
     guiClosed = true
 
+    -- DESATIVA SISTEMAS
     allEspEnabled = false
     espEnabledSingle = false
     loopTPEnabled = false
     spectateEnabled = false
+    hackerScannerEnabled = false
 
-    clearAllESP()
+    -- PARA O SCANNER HACKER
+    pcall(function()
 
-    for _, conn in pairs(connections) do
+        -- limpa textbox
+        if HackerSearchBox then
+            HackerSearchBox.Text = ""
+        end
+
+        -- limpa highlights
+        clearESP()
+
+        -- desconecta scanner
+        if scannerConnection then
+            scannerConnection:Disconnect()
+            scannerConnection = nil
+        end
+
+        -- cancela debounce
+        if debounceThread then
+            task.cancel(debounceThread)
+            debounceThread = nil
+        end
+
+        -- invalida buscas antigas
+        currentSearchId += 1
+
+        -- limpa contador
+        if HackerCounter then
+            HackerCounter.Text = "[0] objetos detectados"
+        end
+    end)
+
+    -- LIMPA ESPS GERAIS
+    pcall(function()
+        clearAllESP()
+    end)
+
+    -- LIMPA OBJETOS ANTIGOS
+    pcall(function()
+        clearObjectESP()
+    end)
+
+    -- DESCONECTA CONEXÕES
+    for _, conn in pairs(connections or {}) do
         if conn and typeof(conn) == "RBXScriptConnection" then
-            pcall(function() conn:Disconnect() end)
+            pcall(function()
+                conn:Disconnect()
+            end)
         end
     end
 
-    for _, conn in pairs(buttonConnections) do
+    -- DESCONECTA BOTÕES
+    for _, conn in pairs(buttonConnections or {}) do
         if conn and typeof(conn) == "RBXScriptConnection" then
-            pcall(function() conn:Disconnect() end)
+            pcall(function()
+                conn:Disconnect()
+            end)
         end
     end
 
-    if screenGui then
-        screenGui:Destroy()
+    -- DESTROI GUI
+    local gui =
+        screenGui
+        or CloseBtn:FindFirstAncestorOfClass("ScreenGui")
+
+    if gui then
+        gui:Destroy()
     end
 end)
+
 CloseBtn.ZIndex = 4
 
 -- Content scroll
@@ -5126,6 +5200,284 @@ GetPosBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- =============================================
+-- ===== TEXTBOX HACKER =====
+-- =============================================
+
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+-- ================= UI =================
+
+local HackerDivider = Instance.new("Frame", Content)
+HackerDivider.Size = UDim2.new(0.95, 0, 0, 2)
+HackerDivider.BackgroundColor3 = Color3.fromRGB(0,255,0)
+HackerDivider.BorderSizePixel = 0
+HackerDivider.ZIndex = 4
+
+local HackerTitle = Instance.new("TextLabel", Content)
+HackerTitle.Size = UDim2.new(0.95,0,0,25)
+HackerTitle.BackgroundTransparency = 1
+HackerTitle.Text = "🔍 OBJECT SCANNER "
+HackerTitle.TextColor3 = Color3.fromRGB(0,255,0)
+HackerTitle.Font = Enum.Font.GothamBold
+HackerTitle.TextSize = 12
+HackerTitle.ZIndex = 4
+
+local HackerSearchBox = Instance.new("TextBox", Content)
+HackerSearchBox.Size = UDim2.new(0.95,0,0,40)
+HackerSearchBox.BackgroundColor3 = Color3.fromRGB(0,5,0)
+HackerSearchBox.BorderSizePixel = 0
+HackerSearchBox.Font = Enum.Font.Code
+HackerSearchBox.TextSize = 16
+HackerSearchBox.TextColor3 = Color3.fromRGB(0,255,0)
+HackerSearchBox.PlaceholderText = "> _"
+HackerSearchBox.PlaceholderColor3 = Color3.fromRGB(0,100,0)
+HackerSearchBox.Text = ""
+HackerSearchBox.ClearTextOnFocus = false
+HackerSearchBox.TextXAlignment = Enum.TextXAlignment.Left
+HackerSearchBox.ZIndex = 4
+
+local hackerStroke = Instance.new("UIStroke")
+hackerStroke.Parent = HackerSearchBox
+hackerStroke.Color = Color3.fromRGB(0,255,0)
+hackerStroke.Thickness = 1.5
+
+local HackerCounter = Instance.new("TextLabel", Content)
+HackerCounter.Size = UDim2.new(0.95,0,0,20)
+HackerCounter.BackgroundTransparency = 1
+HackerCounter.Text = "[0] objetos detectados"
+HackerCounter.TextColor3 = Color3.fromRGB(0,200,0)
+HackerCounter.Font = Enum.Font.Code
+HackerCounter.TextSize = 11
+HackerCounter.ZIndex = 4
+
+-- ================= CONFIG =================
+
+local MAX_HIGHLIGHTS = 300
+local SEARCH_DELAY = 0.35
+
+-- ================= SISTEMA =================
+
+local objectHighlights = {}
+local currentSearchId = 0
+local scannerConnection = nil
+local debounceThread = nil
+
+-- ================= GLITCH =================
+
+task.spawn(function()
+    while HackerSearchBox.Parent do
+        local alpha = 0.6 + math.sin(os.clock() * 8) * 0.4
+
+        pcall(function()
+            hackerStroke.Transparency = 1 - alpha
+        end)
+
+        task.wait(0.03)
+    end
+end)
+
+-- ================= FUNÇÕES =================
+
+local function updateCounter()
+    local count = 0
+
+    for _ in pairs(objectHighlights) do
+        count += 1
+    end
+
+    HackerCounter.Text = "[" .. count .. "] objetos detectados"
+end
+
+local function clearESP()
+    for obj, hl in pairs(objectHighlights) do
+        if hl then
+            pcall(function()
+                hl:Destroy()
+            end)
+        end
+    end
+
+    table.clear(objectHighlights)
+
+    updateCounter()
+end
+
+local function addHighlight(part)
+    if not part then return end
+    if objectHighlights[part] then return end
+
+    if not part:IsA("BasePart") then
+        return
+    end
+
+    local currentCount = 0
+
+    for _ in pairs(objectHighlights) do
+        currentCount += 1
+    end
+
+    if currentCount >= MAX_HIGHLIGHTS then
+        return
+    end
+
+    local hl = Instance.new("Highlight")
+    hl.Adornee = part
+    hl.FillColor = Color3.fromRGB(0,255,0)
+    hl.FillTransparency = 0.5
+    hl.OutlineColor = Color3.fromRGB(0,255,0)
+    hl.OutlineTransparency = 0
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = Workspace
+
+    objectHighlights[part] = hl
+end
+
+local function processObject(obj)
+    if obj:IsA("BasePart") then
+        addHighlight(obj)
+
+    elseif obj:IsA("Model") then
+        local primary = obj.PrimaryPart
+
+        if primary then
+            addHighlight(primary)
+        else
+            local firstPart = obj:FindFirstChildWhichIsA("BasePart", true)
+
+            if firstPart then
+                addHighlight(firstPart)
+            end
+        end
+    end
+end
+
+local function startSearch(searchText)
+    currentSearchId += 1
+    local searchId = currentSearchId
+
+    clearESP()
+
+    searchText = string.lower(searchText)
+
+    if searchText == "" then
+        return
+    end
+
+    local descendants = Workspace:GetDescendants()
+
+    task.spawn(function()
+
+        for i, obj in ipairs(descendants) do
+
+            if searchId ~= currentSearchId then
+                return
+            end
+
+            if obj and obj.Parent then
+
+                local nameLower = string.lower(obj.Name)
+
+                if string.find(nameLower, searchText, 1, true) then
+                    processObject(obj)
+                end
+            end
+
+            -- evita travamento
+            if i % 100 == 0 then
+                task.wait()
+            end
+        end
+
+        updateCounter()
+    end)
+
+    -- monitora novos objetos
+    if scannerConnection then
+        scannerConnection:Disconnect()
+    end
+
+    scannerConnection = Workspace.DescendantAdded:Connect(function(obj)
+
+        if currentSearchId ~= searchId then
+            return
+        end
+
+        if not obj then return end
+
+        local nameLower = string.lower(obj.Name)
+
+        if string.find(nameLower, searchText, 1, true) then
+            processObject(obj)
+            updateCounter()
+        end
+    end)
+end
+
+local function stopScanner()
+    currentSearchId += 1
+
+    if scannerConnection then
+        scannerConnection:Disconnect()
+        scannerConnection = nil
+    end
+
+    clearESP()
+end
+
+-- ================= EVENTOS =================
+
+HackerSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+
+    local text = HackerSearchBox.Text
+
+    -- debounce
+    if debounceThread then
+        task.cancel(debounceThread)
+    end
+
+    debounceThread = task.spawn(function()
+
+        task.wait(SEARCH_DELAY)
+
+        if text ~= HackerSearchBox.Text then
+            return
+        end
+
+        if text == "" then
+            stopScanner()
+        else
+            startSearch(text)
+        end
+    end)
+end)
+
+HackerSearchBox.Focused:Connect(function()
+
+    if HackerSearchBox.Text == "" then
+        HackerSearchBox.PlaceholderText = "> digite o nome..."
+    end
+end)
+
+HackerSearchBox.FocusLost:Connect(function()
+
+    if HackerSearchBox.Text == "" then
+        HackerSearchBox.PlaceholderText = "> _"
+    end
+end)
+
+-- ================= CLEANUP =================
+
+script.Destroying:Connect(function()
+
+    stopScanner()
+
+    if scannerConnection then
+        scannerConnection:Disconnect()
+    end
+end)
+
 -- ========== BOTÕES PERSONALIZADOS NO FINAL ==========
 -- Criar uma linha divisória antes dos botões personalizados
 local Divider = Instance.new("Frame", Content)
@@ -5198,7 +5550,6 @@ local function filterCustomButtons(searchText)
         task.spawn(function()
             task.wait(0.05)
             if firstVisible and firstVisible.Visible and firstVisible.Parent then
-                -- Força o scroll até o botão
                 Content.CanvasPosition = Vector2.new(0, firstVisible.AbsolutePosition.Y - Content.AbsolutePosition.Y + Content.CanvasPosition.Y - 60)
             end
         end)
@@ -5257,37 +5608,26 @@ end)
 MinimizeBox:GetPropertyChangedSignal("Text"):Connect(function()
     if #MinimizeBox.Text > 0 then
         local char = string.sub(MinimizeBox.Text, 1, 1)
-        -- Só aceita letras ou números
         if string.match(char, "%w") then
             minimizeKey = string.upper(char)
             MinimizeBox.Text = minimizeKey
         else
-            -- Se não for letra/número, mantém o valor anterior
             MinimizeBox.Text = minimizeKey
         end
     end
 end)
 
--- Conectar o evento de tecla para minimizar/restaurar
 local function onMinimizeInput(input, gameProcessed)
-    -- Não processa se o input já foi processado pelo jogo
     if gameProcessed then return end
-    
-    -- Só processa teclas do teclado
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    
-    -- Obtém o nome da tecla pressionada
     local keyPressed = input.KeyCode.Name
     
-    -- Verifica se a tecla pressionada é exatamente a tecla de atalho
     if string.upper(keyPressed) == minimizeKey then
-        -- Verifica se NÃO estamos digitando em nenhuma textbox
         local focusedTextBox = nil
         pcall(function()
             focusedTextBox = UserInputService:GetFocusedTextBox()
         end)
         
-        -- Só minimiza/restaura se NÃO estiver focado em uma textbox
         if not focusedTextBox then
             MainFrame.Visible = not MainFrame.Visible
             print("TrollGui " .. (MainFrame.Visible and "Restaurado" or "Minimizado") .. " com tecla: " .. minimizeKey)
@@ -5295,7 +5635,6 @@ local function onMinimizeInput(input, gameProcessed)
     end
 end
 
--- Remover qualquer conexão antiga
 if _G.trollGuiMinimizeConnection then
     pcall(function()
         _G.trollGuiMinimizeConnection:Disconnect()
@@ -5303,7 +5642,6 @@ if _G.trollGuiMinimizeConnection then
     _G.trollGuiMinimizeConnection = nil
 end
 
--- Criar nova conexão
 _G.trollGuiMinimizeConnection = UserInputService.InputBegan:Connect(onMinimizeInput)
 
 -- Initialize UI visuals
@@ -5315,6 +5653,13 @@ MainFrame.Destroying:Connect(function()
     if _G.trollGuiMinimizeConnection then
         pcall(function() _G.trollGuiMinimizeConnection:Disconnect() end)
         _G.trollGuiMinimizeConnection = nil
+    end
+    
+    -- Parar scanner hacker
+    stopRealTimeScanner()
+    
+    if glitchConnection then
+        glitchConnection:Disconnect()
     end
     
     for k, conn in pairs(connections) do
@@ -5335,6 +5680,7 @@ MainFrame.Destroying:Connect(function()
         end
     end
     clearAllESP()
+    clearObjectESP()
 end)
 
 -- ========== Drag everywhere (but ignore interactive elements) ==========
