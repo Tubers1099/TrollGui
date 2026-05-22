@@ -4032,6 +4032,286 @@ local Keys = {
         end)
     end
 },
+	WordSearcher = {
+    Nome = "Word Searcher",
+    IsToggle = false,
+    Repeat = false,
+
+    Script = function(state)
+--[[
+    TrollGui Words - Simple and Fast
+]]
+
+-- SERVICES ====================================================================
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- CONFIGURATION ===============================================================
+local CONFIG = {
+    typingSpeed = 0.1,
+    minLength = 3,
+    maxLength = 20,
+}
+
+-- Common words to ignore
+local commonWords = {
+    ["the"] = true, ["and"] = true, ["a"] = true, ["an"] = true,
+    ["is"] = true, ["it"] = true, ["to"] = true, ["of"] = true,
+    ["in"] = true, ["for"] = true, ["on"] = true, ["with"] = true,
+    ["as"] = true, ["at"] = true, ["by"] = true, ["or"] = true,
+}
+
+-- GLOBAL VARIABLES ===========================================================
+local allWords = {}
+local usedWords = {}
+local isTyping = false
+
+-- GUI SETUP ===================================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "TrollGuiWords"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 60)
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -30)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+mainFrame.BorderSizePixel = 0
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.Active = true
+mainFrame.Selectable = true
+mainFrame.Parent = screenGui
+
+-- UICorner
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+-- UIStroke
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(100, 0, 255)
+mainStroke.Thickness = 2
+mainStroke.Transparency = 0.5
+mainStroke.Parent = mainFrame
+
+-- Barra de arrasto (apenas uma fina faixa no topo)
+local dragBar = Instance.new("TextButton")
+dragBar.Size = UDim2.new(1, -40, 0, 20)
+dragBar.Position = UDim2.new(0, 0, 0, 0)
+dragBar.BackgroundTransparency = 1
+dragBar.Text = ""
+dragBar.BorderSizePixel = 0
+dragBar.ZIndex = 3
+dragBar.Parent = mainFrame
+
+-- Close Button (X)
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -30, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 30, 30)
+closeButton.BorderSizePixel = 0
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 16
+closeButton.Text = "✕"
+closeButton.ZIndex = 2
+closeButton.Parent = mainFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 10)
+closeCorner.Parent = closeButton
+
+-- TextBox (MAIOR e mais fácil de clicar)
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -10, 1, -10)
+searchBox.Position = UDim2.new(0, 5, 0, 5)
+searchBox.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+searchBox.BorderSizePixel = 0
+searchBox.TextColor3 = Color3.fromRGB(200, 150, 255)
+searchBox.PlaceholderText = "Digite e pressione Enter..."
+searchBox.Font = Enum.Font.GothamBold
+searchBox.TextSize = 20
+searchBox.ClearTextOnFocus = false
+searchBox.Text = ""
+searchBox.ZIndex = 1
+searchBox.Parent = mainFrame
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 8)
+searchCorner.Parent = searchBox
+
+-- DICTIONARY LOADING ==========================================================
+local function loadDictionary()
+    local urls = {
+        "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words_dictionary.json",
+        "https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english-usa-no-swears.txt"
+    }
+
+    for _, url in ipairs(urls) do
+        local ok, content = pcall(function()
+            return game:HttpGet(url)
+        end)
+
+        if ok then
+            if content:match("^%s*{") then
+                local success, wordsJson = pcall(function()
+                    return HttpService:JSONDecode(content)
+                end)
+                
+                if success then
+                    for word, _ in pairs(wordsJson) do
+                        local len = #word
+                        if len >= CONFIG.minLength and len <= CONFIG.maxLength and not commonWords[word:lower()] then
+                            table.insert(allWords, word:lower())
+                        end
+                    end
+                end
+            else
+                for word in content:gmatch("[^\r\n]+") do
+                    local len = #word
+                    if len >= CONFIG.minLength and len <= CONFIG.maxLength and not commonWords[word:lower()] then
+                        table.insert(allWords, word:lower())
+                    end
+                end
+            end
+            
+            if #allWords > 0 then
+                return true
+            end
+        end
+        task.wait(0.1)
+    end
+    return false
+end
+
+-- AUTO-TYPE FUNCTION ==========================================================
+local function autoTypeWord(word, currentInput)
+    if isTyping then return end
+    isTyping = true
+    
+    local remaining = word:sub(#currentInput + 1)
+    
+    task.spawn(function()
+        local cam = workspace.CurrentCamera
+        local size = cam.ViewportSize
+        local x, y = size.X/2, size.Y/2
+        
+        for _ = 1, 3 do
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+            task.wait(0.03)
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+            task.wait(0.03)
+        end
+
+        for c in remaining:upper():gmatch(".") do
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[c], false, game)
+            task.wait(CONFIG.typingSpeed)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[c], false, game)
+        end
+
+        task.wait(0.1)
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+        
+        isTyping = false
+    end)
+end
+
+-- FIND LONGEST UNUSED WORD ===================================================
+local function findLongestWord(input)
+    local bestWord = nil
+    local bestLength = 0
+    
+    for _, w in ipairs(allWords) do
+        if w:sub(1, #input) == input and w ~= input and not usedWords[w] then
+            if #w > bestLength then
+                bestWord = w
+                bestLength = #w
+            end
+        end
+    end
+    
+    return bestWord
+end
+
+-- DRAG FUNCTIONALITY =========================================================
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+dragBar.MouseButton1Down:Connect(function()
+    dragging = true
+    local mousePos = UserInputService:GetMouseLocation()
+    dragStart = Vector2.new(mousePos.X, mousePos.Y)
+    startPos = mainFrame.Position
+    
+    local moveConnection
+    local releaseConnection
+    
+    moveConnection = UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local currentMouse = UserInputService:GetMouseLocation()
+            local deltaX = currentMouse.X - dragStart.X
+            local deltaY = currentMouse.Y - dragStart.Y
+            
+            mainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + deltaX,
+                startPos.Y.Scale,
+                startPos.Y.Offset + deltaY
+            )
+        end
+    end)
+    
+    releaseConnection = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            if moveConnection then moveConnection:Disconnect() end
+            if releaseConnection then releaseConnection:Disconnect() end
+        end
+    end)
+end)
+
+-- EVENTS =====================================================================
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Clica em qualquer lugar do mainFrame para focar na TextBox
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        searchBox:CaptureFocus()
+    end
+end)
+
+searchBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed and searchBox.Text ~= "" and not isTyping then
+        local input = searchBox.Text:lower()
+        local word = findLongestWord(input)
+        
+        if word then
+            usedWords[word] = true
+            autoTypeWord(word, input)
+            searchBox.Text = ""
+        else
+            searchBox.Text = ""
+        end
+    end
+end)
+
+-- START =======================================================================
+task.spawn(function()
+    loadDictionary()
+    searchBox:CaptureFocus()
+end)
+    end
+},
 }
 -- FIM DA SEÇÃO DE BOTÕES ↑↑↑
 
@@ -5733,66 +6013,3 @@ end
 
 -- ========== INICIALIZAR SISTEMA DE NOTIFICAÇÃO ==========
 setupPlayerLeaveNotification()
-
---[[ 
-    Mouse Unlock Toggle - ENTER
-    Funciona até com menu ESC aberto
-]]
-
--- ===== ANTI DUPLICAÇÃO =====
-if _G.MouseUnlockToggle then
-    pcall(function()
-        _G.MouseUnlockToggle:Disconnect()
-    end)
-    _G.MouseUnlockToggle = nil
-end
-
--- ===== SERVIÇOS =====
-local ContextActionService = game:GetService("ContextActionService")
-local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
-
--- ===== ESTADO =====
-local mouseUnlocked = false
-local originalMouseBehavior = UserInputService.MouseBehavior
-local ACTION_NAME = "MouseUnlockEnter"
-
--- ===== FUNÇÃO NOTIFICAÇÃO =====
-local function notify(text)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = "KKKKKK",
-            Text = text,
-            Duration = 1
-        })
-    end)
-end
-
--- ===== TOGGLE =====
-local function toggleMouse()
-    mouseUnlocked = not mouseUnlocked
-
-    if mouseUnlocked then
-        print("")
-    else
-        print(" ")
-    end
-end
-
--- ===== INPUT (FUNCIONA NO MENU ESC) =====
-local function onEnter(actionName, inputState, inputObject)
-    if inputState == Enum.UserInputState.Begin then
-        toggleMouse()
-    end
-
-    return Enum.ContextActionResult.Sink
-end
-
-_G.MouseUnlockToggle = ContextActionService:BindActionAtPriority(
-    ACTION_NAME,
-    onEnter,
-    false,
-    Enum.ContextActionPriority.High.Value,
-    Enum.KeyCode.Return,
-    Enum.KeyCode.KeypadEnter
-)
