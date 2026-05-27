@@ -4072,10 +4072,27 @@ local usedWords = {}
 local isTyping = false
 
 -- GUI SETUP ===================================================================
+local Players = game:GetService("Players")
+local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "TrollGuiWords"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
+screenGui.DisplayOrder = 999
+
+if gethui then
+    screenGui.Parent = gethui()
+elseif get_hidden_gui then
+    screenGui.Parent = get_hidden_gui()
+else
+    screenGui.Parent = playerGui
+end
+
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(screenGui)
+    end
+end)
 
 -- Main Frame
 local mainFrame = Instance.new("Frame")
@@ -4774,7 +4791,7 @@ pcall(function()
         syn.protect_gui(screenGui)
     end
 end)
-
+-- Proteger GUI
 ---// MainFrame
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = screenGui
